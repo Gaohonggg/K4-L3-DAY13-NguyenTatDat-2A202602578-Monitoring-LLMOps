@@ -1,60 +1,33 @@
-# Template Alert và Runbook
+# Alert và runbook
 
-Mỗi alert phải dựa trên triệu chứng người dùng hoặc SLO, không dựa trực tiếp vào tên implementation nội bộ.
-
-## Alert mẫu để tham khảo
-
-Ví dụ dưới đây minh họa mức độ cụ thể cần có. Học viên không cần copy nguyên, nhưng ba alert trong bài nộp nên rõ ràng tương tự: điều kiện là gì, kéo dài bao lâu, ảnh hưởng tới user ra sao và người trực cần kiểm tra gì trước.
-
-- Tên: `HighLatencyP95`
-- Severity: `warning`
-- Duration: `5m`
-- Kênh thông báo: Slack `#k4-l3b-alerts`
-- SLI/SLO liên quan: latency P95 của `response_sent.latency_ms`
-- Điều kiện và thời gian duy trì: `p95(latency_ms) > 3000ms` trong 5 phút
-- Ảnh hưởng tới người dùng: người dùng phải chờ lâu hơn trước khi nhận câu trả lời
-- Ba bước kiểm tra đầu tiên:
-  1. Mở dashboard latency để xác nhận P95/P99 và khoảng thời gian tăng.
-  2. Lọc `data/logs.jsonl` trong khoảng đó, lấy một `correlation_id` có `latency_ms` cao.
-  3. Mở trace cùng `correlation_id` trên Langfuse, so sánh các span chính để xác định bước nào bất thường.
-- Mitigation tạm thời: dựa trên evidence thực tế để rollback prompt, khôi phục cấu hình liên quan, tắt practice scenario hoặc giảm tải khi demo.
-- Owner: `student-<MSSV>`
+Ba rule trong [`config/alert_rules.yaml`](../config/alert_rules.yaml) theo dõi triệu chứng từ structured log. Người trực là `student-2A202602578`; kênh thông báo được cấu hình là Slack `#k4-l3b-alerts`. Mỗi rule phải duy trì vượt ngưỡng 5 phút. Tại tải thấp, rule error và retrieval chỉ đánh giá khi có tối thiểu 10 request/attempt trong cửa sổ để tránh nhiễu từ một mẫu đơn lẻ.
 
 ## Alert 1
 
-- Tên:
-- Severity:
-- Duration:
-- Kênh thông báo: Slack
-- SLI/SLO liên quan:
-- Điều kiện và thời gian duy trì:
-- Ảnh hưởng tới người dùng:
-- Ba bước kiểm tra đầu tiên:
-- Mitigation tạm thời:
-- Owner:
+**HighLatencyP95 · warning · P95 > 3000 ms trong 5 phút.** Người dùng phải chờ lâu hơn để nhận câu trả lời. Rule liên quan trực tiếp đến ngưỡng latency của SLO `fast_successful_requests`.
+
+1. Mở dashboard latency với cùng cửa sổ thời gian; xác nhận P95, P99, TTFT và thời điểm bắt đầu tăng.
+2. Lọc `data/logs.jsonl` theo `response_sent.latency_ms > 3000`, lấy `correlation_id` của request chậm.
+3. Mở trace cùng `correlation_id` trên Langfuse; so sánh retrieval, khoảng giữa retrieval và generation (bao gồm prompt fetch), rồi generation để xác định bước chiếm thời gian.
+
+Mitigation: giảm tải hoặc khôi phục dependency chậm; rollback prompt chỉ khi trace cho thấy regression gắn với version mới. Theo dõi P95 trở lại dưới ngưỡng trước khi đóng alert.
 
 ## Alert 2
 
-- Tên:
-- Severity:
-- Duration:
-- Kênh thông báo: Slack
-- SLI/SLO liên quan:
-- Điều kiện và thời gian duy trì:
-- Ảnh hưởng tới người dùng:
-- Ba bước kiểm tra đầu tiên:
-- Mitigation tạm thời:
-- Owner:
+**HighErrorRate · critical · error rate > 2% trong 5 phút**, với ít nhất 10 request. Người dùng nhận lỗi thay vì câu trả lời; rule liên quan đến success SLI của SLO.
+
+1. Mở panel Errors; xác nhận tổng request, error rate và breakdown theo `error_type`.
+2. Lọc `request_failed` trong khoảng sự cố, chọn một `correlation_id` và kiểm tra `error_type`/`tool_name`.
+3. Mở trace cùng ID để tìm span lỗi và phân biệt lỗi retrieval, generation hay dependency ngoài.
+
+Mitigation: khôi phục dependency bị lỗi hoặc quay về cấu hình/prompt ổn định nếu có bằng chứng regression. Kiểm tra error rate và SLO burn sau khi phục hồi.
 
 ## Alert 3
 
-- Tên:
-- Severity:
-- Duration:
-- Kênh thông báo: Slack
-- SLI/SLO liên quan:
-- Điều kiện và thời gian duy trì:
-- Ảnh hưởng tới người dùng:
-- Ba bước kiểm tra đầu tiên:
-- Mitigation tạm thời:
-- Owner:
+**LowRetrievalSuccess · warning · retrieval success < 90% trong 5 phút**, với ít nhất 10 attempt. Người dùng có nguy cơ nhận lỗi hoặc câu trả lời thiếu context; rule bảo vệ chất lượng RAG.
+
+1. Mở panel Errors, xác nhận retrieval success giảm và đối chiếu error rate/quality.
+2. Lọc các log `tool_name=retrieval` và `tool_success=false`, chọn `correlation_id` đại diện.
+3. Mở trace cùng ID, kiểm tra retriever span, thời gian, trạng thái và số tài liệu trả về.
+
+Mitigation: kiểm tra kết nối vector store và cấu hình truy xuất; chuyển sang fallback an toàn nếu dependency chưa phục hồi. Chỉ đóng alert khi success rate trên 90% với đủ số mẫu.

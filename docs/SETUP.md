@@ -46,9 +46,13 @@ LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 LANGFUSE_PROMPT_NAME=day13-chat
 LANGFUSE_PROMPT_LABEL=production
+LANGFUSE_PROMPT_FETCH_TIMEOUT_SECONDS=10
+LANGFUSE_TIMEOUT=20
 ```
 
 5. Lưu `.env`, khởi động lại API, chạy `python scripts/load_test.py`, rồi mở đúng project để kiểm tra trace mới.
+
+Hai timeout trên giúp việc lấy prompt và gửi observations ổn định hơn khi Langfuse Cloud phản hồi chậm. Nếu `.env` đã được tạo trước khi các dòng này được thêm vào `.env.example`, hãy bổ sung chúng rồi khởi động lại API.
 
 Không commit/chia sẻ `.env`, không gửi key cho bạn khác và không để key xuất hiện trong screenshot. Nếu chưa cấu hình key, app vẫn chạy bằng prompt local nhưng phần trace/prompt evidence chưa hoàn thành. Cấu hình môi trường này theo [tài liệu SDK chính thức của Langfuse](https://langfuse.com/docs/observability/sdk/overview).
 

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 13 · LLMOps dashboard</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b1020; color: #e9eefb; }
+    main { max-width: 1540px; margin: auto; padding: 24px 26px; }
+    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+    .eyebrow { color: #86a8ff; text-transform: uppercase; letter-spacing: .16em; font-size: 12px; font-weight: 700; }
+    h1 { margin: 8px 0 7px; font-size: clamp(26px, 3vw, 38px); line-height: 1.12; }
+    header p { color: #a3b1cb; margin: 0; font-size: 14px; }
+    .status { color: #a3b1cb; text-align: right; font-size: 13px; line-height: 1.8; }
+    .status strong { color: #e9eefb; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .card { min-height: 246px; padding: 18px; border: 1px solid #28354f; border-radius: 18px; background: linear-gradient(150deg, #172137, #11192b); box-shadow: 0 12px 35px #03071340; }
+    .card-top { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+    h2 { font-size: 16px; font-weight: 650; margin: 0; }
+    .unit { color: #91a1bd; font-size: 12px; white-space: nowrap; }
+    .value { font-size: 34px; font-weight: 740; letter-spacing: -.04em; margin: 15px 0 2px; font-variant-numeric: tabular-nums; }
+    .detail { font-size: 13px; color: #b3c2dc; min-height: 32px; line-height: 1.5; }
+    .chart { height: 68px; margin: 6px 0 8px; }
+    .chart svg { width: 100%; height: 100%; overflow: visible; }
+    .footer { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #2a3852; padding-top: 8px; font-size: 12px; color: #a3b1cb; }
+    .threshold { color: #f1bf77; }
+    .good { color: #6fdfb3; }
+    .bad { color: #ff8d98; }
+    .legend { color: #91a1bd; font-size: 11px; }
+    @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 650px) { main { padding: 22px 16px; } header { display: block; } .status { text-align: left; margin-top: 12px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="eyebrow">K4-L3B · Monitoring & LLMOps</div>
+      <h1>AI API observability</h1>
+      <p>Source: data/logs.jsonl · Structured application logs</p>
+    </div>
+    <div class="status"><strong id="range">Last 60 minutes</strong><br><span id="updated">Loading…</span><br><span id="refresh">Refresh every 30s</span></div>
+  </header>
+  <div class="grid">
+    <section class="card" id="latency"><div class="card-top"><h2>Latency percentiles & TTFT</h2><span class="unit">ms</span></div><div class="value"></div><div class="detail"></div><div class="chart"></div><div class="footer"><span class="threshold"></span><span class="legend">P95 by minute</span></div></section>
+    <section class="card" id="traffic"><div class="card-top"><h2>Request traffic</h2><span class="unit">requests/min</span></div><div class="value"></div><div class="detail"></div><div class="chart"></div><div class="footer"><span class="threshold"></span><span class="legend">Requests by minute</span></div></section>
+    <section class="card" id="errors"><div class="card-top"><h2>Errors & retrieval success</h2><span class="unit">%</span></div><div class="value"></div><div class="detail"></div><div class="chart"></div><div class="footer"><span class="threshold"></span><span class="legend">Errors by minute</span></div></section>
+    <section class="card" id="cost"><div class="card-top"><h2>Cost over time</h2><span class="unit">USD</span></div><div class="value"></div><div class="detail"></div><div class="chart"></div><div class="footer"><span class="threshold"></span><span class="legend">USD by minute</span></div></section>
+    <section class="card" id="tokens"><div class="card-top"><h2>Input & output tokens</h2><span class="unit">tokens</span></div><div class="value"></div><div class="detail"></div><div class="chart"></div><div class="footer"><span class="threshold"></span><span class="legend">Input + output by minute</span></div></section>
+    <section class="card" id="quality"><div class="card-top"><h2>Quality proxy</h2><span class="unit">score 0–1</span></div><div class="value"></div><div class="detail"></div><div class="chart"></div><div class="footer"><span class="threshold"></span><span class="legend">Mean by minute</span></div></section>
+  </div>
+</main>
+<script>
+  const number = (value, digits = 0) => value == null ? '—' : Number(value).toLocaleString('en-US', {maximumFractionDigits: digits, minimumFractionDigits: digits});
+  const field = (id, selector, text) => { document.querySelector(`#${id} ${selector}`).textContent = text; };
+  function sparkline(series, key, color, threshold = null) {
+    const width = 400, height = 94, left = 4, right = 4, top = 8, bottom = 11;
+    const values = series.map(row => row[key]);
+    const present = values.map((value, index) => ({value, index})).filter(point => point.value != null);
+    const ceiling = Math.max(1, threshold || 0, ...present.map(point => point.value)) * 1.12;
+    const x = index => left + index * (width - left - right) / Math.max(1, values.length - 1);
+    const y = value => top + (1 - value / ceiling) * (height - top - bottom);
+    const points = present.map(point => `${x(point.index).toFixed(1)},${y(point.value).toFixed(1)}`).join(' ');
+    const target = threshold == null ? '' : `<line x1="0" x2="400" y1="${y(threshold)}" y2="${y(threshold)}" stroke="#edaf65" stroke-width="1" stroke-dasharray="5 4" opacity=".8"/>`;
+    return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="400" y1="${height-bottom}" y2="${height-bottom}" stroke="#344663" stroke-width="1"/>${target}<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="${points}"/></svg>`;
+  }
+  function draw(data) {
+    const p = data.panels, s = data.series;
+    document.getElementById('range').textContent = `Last ${data.time_range_minutes} minutes`;
+    document.getElementById('updated').textContent = `Updated ${new Date(data.generated_at).toLocaleString()}`;
+    document.getElementById('refresh').textContent = `Refresh every ${data.refresh_seconds}s`;
+
+    field('latency', '.value', `${number(p.latency.p95)} ms`);
+    field('latency', '.detail', `P50 ${number(p.latency.p50)} · P99 ${number(p.latency.p99)} · TTFT P95 ${number(p.latency.ttft_p95)} ms`);
+    field('latency', '.threshold', `SLO P95 ≤ ${number(p.latency.threshold)} ms`);
+    field('traffic', '.value', number(p.traffic.count));
+    field('traffic', '.detail', `${number(p.traffic.rate_per_minute)} requests in the last minute`);
+    field('traffic', '.threshold', `Traffic reference ≥ ${number(p.traffic.threshold)}/min`);
+    field('errors', '.value', `${number(p.errors.error_rate_pct, 1)}%`);
+    const breakdown = Object.entries(p.errors.breakdown).map(([name, count]) => `${name}: ${count}`).join(', ');
+    field('errors', '.detail', `Retrieval success ${number(p.errors.retrieval_success_rate_pct, 1)}% · ${breakdown || 'No errors'}`);
+    field('errors', '.threshold', `Error rate ≤ ${number(p.errors.threshold)}%`);
+    field('cost', '.value', `$${number(p.cost.total, 4)}`);
+    field('cost', '.detail', 'Total estimated cost in the selected window');
+    field('cost', '.threshold', `Budget reference ≤ $${number(p.cost.threshold, 2)}`);
+    field('tokens', '.value', number(p.tokens.input_total + p.tokens.output_total));
+    field('tokens', '.detail', `Input ${number(p.tokens.input_total)} · Output ${number(p.tokens.output_total)}`);
+    field('tokens', '.threshold', `Total reference ≤ ${number(p.tokens.threshold)}`);
+    field('quality', '.value', number(p.quality.mean, 2));
+    field('quality', '.detail', 'Heuristic score from successful responses');
+    field('quality', '.threshold', `Minimum mean ≥ ${number(p.quality.threshold, 2)}`);
+
+    const plots = [
+      ['latency', 'latency_p95', '#8aa6ff', p.latency.threshold],
+      ['traffic', 'traffic', '#6fdfb3', null],
+      ['errors', 'errors', '#ff8d98', null],
+      ['cost', 'cost_usd', '#e7bd80', null],
+      ['tokens', 'tokens_total', '#9c8bff', null],
+      ['quality', 'quality_avg', '#72d5d4', p.quality.threshold],
+    ];
+    for (const [id, key, color, threshold] of plots) {
+      document.querySelector(`#${id} .chart`).innerHTML = sparkline(s, key, color, threshold);
+    }
+  }
+  async function refresh() {
+    let delay = 30000;
+    try {
+      const response = await fetch('/dashboard/data', {cache: 'no-store'});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      draw(data);
+      delay = data.refresh_seconds * 1000;
+    } catch (error) {
+      document.getElementById('updated').textContent = `Data unavailable: ${error.message}`;
+    } finally {
+      window.setTimeout(refresh, delay);
+    }
+  }
+  refresh();
+</script>
+</body>
+</html>

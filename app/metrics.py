@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from math import ceil
 from statistics import mean
 
 REQUEST_LATENCIES: list[int] = []
@@ -41,7 +42,7 @@ def percentile(values: list[int], p: int) -> float:
     if not values:
         return 0.0
     items = sorted(values)
-    idx = max(0, min(len(items) - 1, round((p / 100) * len(items) + 0.5) - 1))
+    idx = max(0, min(len(items) - 1, ceil((p / 100) * len(items)) - 1))
     return float(items[idx])
 
 
