@@ -1,7 +1,5 @@
 # Báo cáo cá nhân — K4-L3B Day 13 Monitoring & LLMOps
 
-Evidence kỹ thuật trong báo cáo lấy từ lần chạy trên repository cá nhân ngày 2026-09-30. Năm ảnh runtime cần được bổ sung từ chính các màn hình và ID ghi dưới đây trước khi nộp.
-
 ## 1. Thông tin học viên
 
 - **Họ và tên:** Nguyễn Tất Đạt
@@ -10,7 +8,7 @@ Evidence kỹ thuật trong báo cáo lấy từ lần chạy trên repository c
 - **Repository URL:** https://github.com/Gaohonggg/K4-L3-DAY13-NguyenTatDat-2A202602578-Monitoring-LLMOps
 - **Commit SHA cuối:** Bổ sung khi đã thêm đủ năm ảnh, tạo commit nộp và ghi cùng SHA đó trên LMS/Codelabs.
 - **Challenge ID:** `day13-k4-l3b-monitoring-llmops-v1`
-- **Tên project Langfuse cá nhân:** `day13-k4-l3b-2A202602578` (xác nhận qua Projects API của project gắn với key hiện tại)
+- **Tên project Langfuse cá nhân:** `day13-k4-l3b-2A202602578`
 
 ## 2. Evidence index
 
